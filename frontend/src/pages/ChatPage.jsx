@@ -2,10 +2,10 @@ import { useWallpaper } from "../context/wallpaper";
 import { useChatStore } from "../store/useChatStore";
 import { useSelectedConversation } from "../hooks/useSelectedConversation";
 import { useEffect } from "react";
-import ChatSidebar from "../components/chat/ChatSidebar.jsx";
-import { ChatHeader } from "../components/chat/ChatHeader.jsx";
-import { MessageList } from "../components/chat/MessageList.jsx";
-import { ChatComposer } from "../components/chat/ChatComposer.jsx";
+import ChatSidebar from "../components/chat/ChatSidebar";
+import { ChatHeader } from "../components/chat/ChatHeader";
+import { MessageList } from "../components/chat/MessageList";
+import { ChatComposer } from "../components/chat/ChatComposer";
 
 function ChatPage() {
   const { frameStyle } = useWallpaper();
@@ -23,7 +23,6 @@ function ChatPage() {
     getConversations();
   }, [getConversations, getUsers]);
 
-  
   useEffect(() => {
     if (!activeConversationId) return;
 

@@ -1,5 +1,5 @@
 import { Avatar } from "@heroui/react";
-import { AvatarWithOnlineIndicator } from "./AvatarWithOnlineIndicator.jsx";
+import { AvatarWithOnlineIndicator } from "./AvatarWithOnlineIndicator";
 
 export function ConversationRow({ user, selected, onSelect }) {
   return (

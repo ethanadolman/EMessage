@@ -81,19 +81,27 @@ export const useChatStore = create(
       },
 
       subscribeToMessages: (userId) => {
-        if (!userId) return;
-
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
 
         socket.off("newMessage");
+
         socket.on("newMessage", (newMessage) => {
-          // if im not the receiver don't do anything just return
-          if (String(newMessage.senderId) !== String(userId)) return;
 
-          set({ messages: [...get().messages, newMessage] });
+          const { selectedUser } = get();
 
+          // Always refresh sidebar
           get().getConversations();
+
+          // Only append if this conversation is currently open
+          if (
+            selectedUser &&
+            String(newMessage.senderId) === String(selectedUser._id)
+          ) {
+            set((state) => ({
+              messages: [...state.messages, newMessage],
+            }));
+          }
         });
       },
 
