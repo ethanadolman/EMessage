@@ -88,6 +88,38 @@ export const useChatStore = create(
 
         socket.off("newMessage");
 
+        const showIncomingMessageNotification = (message, sender, conversationId) => {
+          if (typeof window === "undefined") return;
+          if (typeof window.Notification === "undefined") return;
+
+          const isConversationOpen = get().activeConversationId === conversationId;
+          const shouldSkip =
+            document.visibilityState === "visible" &&
+            window.document.hasFocus() &&
+            isConversationOpen;
+
+          if (shouldSkip) return;
+
+          const senderName = sender?.fullName || sender?.name || "a contact";
+          const senderAvatar = sender?.profilePic || sender?.avatarUrl || "/favicon.ico";
+
+          if (window.Notification.permission === "granted") {
+            new window.Notification(`${senderName}`, {
+              body: message.text || "You received a new message",
+              icon: senderAvatar,
+            });
+          } else if (window.Notification.permission === "default") {
+            window.Notification.requestPermission().then((permission) => {
+              if (permission === "granted") {
+                new window.Notification(`${senderName}`, {
+                  body: message.text || "You received a new message",
+                  icon: senderAvatar,
+                });
+              }
+            });
+          }
+        };
+
         socket.on("newMessage", (newMessage) => {
           const { selectedUser, activeConversationId } = get();
           const authUserId = useAuthStore.getState().authUser?._id;
@@ -108,6 +140,8 @@ export const useChatStore = create(
             get().clearUnreadCount(conversationPartnerId);
           } else {
             get().incrementUnreadCount(conversationPartnerId);
+            const sender = get().users.find((user) => String(user._id) === String(conversationPartnerId));
+            showIncomingMessageNotification(newMessage, sender, conversationPartnerId);
           }
 
           // Also append immediately if the conversation is currently open
