@@ -13,24 +13,69 @@ function getReceiverSocketId(userId) {
   return userSocketMap[userId];
 }
 
-// online users map = { userId: socketId }
+// Presence state: { userId: { socketId, status } }
 const userSocketMap = {};
+const IDLE_TIMEOUT_MS = 120_000;
+
+function broadcastPresence() {
+  const presence = Object.entries(userSocketMap).reduce((acc, [userId, state]) => {
+    acc[userId] = state.status;
+    return acc;
+  }, {});
+
+  io.emit("getPresence", presence);
+}
+
+function setUserStatus(userId, socketId, status) {
+  if (!userId) return;
+
+  userSocketMap[userId] = { socketId, status };
+  broadcastPresence();
+}
+
+function clearUserStatus(userId, socketId) {
+  if (!userId || userSocketMap[userId]?.socketId !== socketId) return;
+
+  delete userSocketMap[userId];
+  broadcastPresence();
+}
 
 io.on("connection", (socket) => {
   const userId = socket.handshake.query.userId;
 
-  if (userId) userSocketMap[userId] = socket.id;
-
-  // io.emit() sends event to everyone - broadcast
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
-
-  // socket.on is used to listen for events
-  socket.on("disconnect", () => {
-    // Only remove the user if THIS socket is still the active one
-  if (userId && userSocketMap[userId] === socket.id) {
-    delete userSocketMap[userId];
+  if (userId) {
+    setUserStatus(userId, socket.id, "online");
   }
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
+
+  socket.on("activity", () => {
+    if (userId) {
+      setUserStatus(userId, socket.id, "online");
+    }
+  });
+
+  socket.on("idle", () => {
+    if (userId) {
+      setUserStatus(userId, socket.id, "idle");
+    }
+  });
+
+  socket.on("disconnect", () => {
+    clearUserStatus(userId, socket.id);
+  });
+
+  const idleTimer = setInterval(() => {
+    if (!userId) return;
+
+    const state = userSocketMap[userId];
+    if (!state || state.socketId !== socket.id) return;
+
+    if (state.status === "online") {
+      setUserStatus(userId, socket.id, "idle");
+    }
+  }, IDLE_TIMEOUT_MS);
+
+  socket.on("disconnect", () => {
+    clearInterval(idleTimer);
   });
 });
 

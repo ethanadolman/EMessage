@@ -8,7 +8,7 @@ import { SearchField, Tabs } from "@heroui/react";
 import { MessageSquareIcon, UsersIcon } from "lucide-react";
 import { ConversationRow } from "./ConversationRow";
 
-function mapUserForList(user, onlineUsers) {
+function mapUserForList(user, onlineUsers, presenceMap) {
   return {
     conversationId: user._id,
     id: user._id,
@@ -16,11 +16,13 @@ function mapUserForList(user, onlineUsers) {
     avatarUrl: user.profilePic,
     initials: getInitials(user.fullName),
     isOnline: onlineUsers.includes(user._id),
+    isIdle: presenceMap?.[user._id] === "idle",
     peer: {
       name: user.fullName,
       avatarUrl: user.profilePic,
       initials: getInitials(user.fullName),
       isOnline: onlineUsers.includes(user._id),
+      isIdle: presenceMap?.[user._id] === "idle",
     },
   };
 }
@@ -40,13 +42,14 @@ function ChatSidebar() {
   const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
 
   const onlineUsers = useAuthStore((state) => state.onlineUsers);
+  const presenceMap = useAuthStore((state) => state.presenceMap);
 
   const { activeConversationId, isLargeScreen } = useSelectedConversation();
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
 
-  const conversationUsers = conversations.map((user) => mapUserForList(user, onlineUsers));
-  const allUsers = users.map((user) => mapUserForList(user, onlineUsers));
+  const conversationUsers = conversations.map((user) => mapUserForList(user, onlineUsers, presenceMap));
+  const allUsers = users.map((user) => mapUserForList(user, onlineUsers, presenceMap));
 
   const filteredConversations = normalizedSearchQuery
     ? conversationUsers.filter((conversation) =>
