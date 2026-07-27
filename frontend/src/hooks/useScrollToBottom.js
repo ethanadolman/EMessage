@@ -1,22 +1,26 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Scrolls a container to the bottom when `threadKey` or `lastItemId` changes
- * (e.g. new message or switched conversation). Returns a ref for the scrollable element.
+ * Scrolls a container to the bottom when `threadKey` or `lastItemId` changes.
+ * If `waitForImageLoad` is true, the scroll happens later via the image load callback.
  */
-function useScrollToBottom(threadKey, lastItemId) {
+function useScrollToBottom(threadKey, lastItemId, waitForImageLoad = false) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
     if (threadKey == null || threadKey === "") return;
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || waitForImageLoad) return;
+
     const scrollToBottom = () => {
       el.scrollTop = el.scrollHeight;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
     };
+
     scrollToBottom();
-    requestAnimationFrame(scrollToBottom);
-  }, [threadKey, lastItemId]);
+  }, [threadKey, lastItemId, waitForImageLoad]);
 
   return scrollRef;
 }

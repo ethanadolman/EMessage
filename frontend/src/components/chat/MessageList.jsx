@@ -6,8 +6,24 @@ import { useSelectedConversation } from "../../hooks/useSelectedConversation";
 export function MessageList() {
   const { activeConversation, activeConversationId } = useSelectedConversation();
 
-  const lastMessageId = activeConversation?.messages.at(-1)?.id;
-  const messagesScrollRef = useScrollToBottom(activeConversationId, lastMessageId);
+  const lastMessage = activeConversation?.messages.at(-1);
+  const lastMessageId = lastMessage?.id;
+  const waitForImageLoad = Boolean(lastMessage?.imageUrl);
+  const messagesScrollRef = useScrollToBottom(activeConversationId, lastMessageId, waitForImageLoad);
+
+  const scrollToBottom = () => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+
+    const applyScroll = () => {
+      el.scrollTop = el.scrollHeight;
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    };
+
+    applyScroll();
+  };
 
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -20,7 +36,11 @@ export function MessageList() {
             Today
           </p>
           {activeConversation.messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
+            <MessageBubble
+              key={message.id}
+              message={message}
+              onImageLoad={message.id === lastMessageId && waitForImageLoad ? scrollToBottom : undefined}
+            />
           ))}
         </div>
       ) : (

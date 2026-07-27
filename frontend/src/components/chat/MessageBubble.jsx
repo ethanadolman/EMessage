@@ -4,7 +4,7 @@ import { MessageVideo } from "./MessageVideo";
 // Compress + size images for the bubble (q-auto works for images; f-auto picks WebP/AVIF).
 const IMAGE_TRANSFORM = "q-auto,w-640,f-auto";
 
-export function MessageBubble({ message }) {
+export function MessageBubble({ message, onImageLoad }) {
   const isOwnMessage = message.role === "me";
   const hasImage = Boolean(message.imageUrl);
   const hasVideo = Boolean(message.videoUrl);
@@ -22,6 +22,7 @@ export function MessageBubble({ message }) {
           <img
             src={withTransform(message.imageUrl, IMAGE_TRANSFORM)}
             alt=""
+            onLoad={onImageLoad}
             className="mb-1.5 max-h-40 max-w-full rounded-lg object-cover sm:max-h-52 sm:rounded-xl"
           />
         ) : null}

@@ -78,9 +78,11 @@ export function ChatComposer() {
         <TextArea
           fullWidth
           variant="secondary"
-          placeholder="iMessage"
+          placeholder="EMessage"
           rows={1}
           value={composerText}
+          classNames={{ input: "resize-none" }}
+          style={{ resize: "none" }}
           onChange={handleComposerTextChange}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
