@@ -7,6 +7,7 @@ import { ThemePresetPicker } from "../ThemePresetPicker";
 
 import { ThemeToggle } from "../ThemeToggle";
 import { WallpaperPicker } from "../WallpaperPicker";
+import { TypingIndicator } from "./TypingIndicator";
 
 import { useChatStore } from "../../store/useChatStore";
 import { useSelectedConversation } from "../../hooks/useSelectedConversation";
@@ -54,7 +55,9 @@ export function ChatHeader() {
               {activeConversation.peer.name}
             </p>
             <p className="truncate text-xs text-muted">
-              {activeConversation.peer.isIdle ? (
+              {activeConversation.peer.isTyping ? (
+                <TypingIndicator className="font-medium text-accent" />
+              ) : activeConversation.peer.isIdle ? (
                 <span className="font-medium text-amber-500">Idle</span>
               ) : activeConversation.peer.isOnline ? (
                 <span className="font-medium text-success">Online</span>

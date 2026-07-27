@@ -23,22 +23,64 @@ export async function getConversationsForSidebar(req, res) {
     const conversations = await Message.aggregate([
       // 1. Keep only the messages I sent or received.
       { $match: { $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }] } },
-      // 2. Collapse them into one row per chat partner, noting our latest message time.
+      // 2. Sort by time so the latest message is the one we keep.
+      { $sort: { createdAt: 1 } },
+      // 3. Collapse them into one row per chat partner, noting the latest message details.
       {
         $group: {
-          // The partner is the other person on the message (not me).
           _id: { $cond: [{ $eq: ["$senderId", loggedInUserId] }, "$receiverId", "$senderId"] },
           lastMessageAt: { $max: "$createdAt" },
+          lastMessageText: { $last: "$text" },
+          lastMessageImage: { $last: "$image" },
+          lastMessageVideo: { $last: "$video" },
         },
       },
-      // 3. Put the most recent conversation at the top.
+      // 4. Put the most recent conversation at the top.
       { $sort: { lastMessageAt: -1 } },
-      // 4. Look up each partner's user profile (comes back as an array).
-      { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
-      // 5. Pull that profile out of the array and make it the document.
-      { $replaceRoot: { newRoot: { $first: "$user" } } },
-      // 6. Hide the private clerkId field from the result.
-      { $project: { clerkId: 0 } },
+      // 5. Look up each partner's user profile.
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "_id",
+          as: "user",
+        },
+      },
+      { $unwind: "$user" },
+      // 6. Merge the preview fields into the user document.
+      {
+        $addFields: {
+          _id: "$user._id",
+          clerkId: "$user.clerkId",
+          fullName: "$user.fullName",
+          profilePic: "$user.profilePic",
+          email: "$user.email",
+          createdAt: "$user.createdAt",
+          updatedAt: "$user.updatedAt",
+          lastMessageAt: "$lastMessageAt",
+          lastMessagePreview: {
+            $cond: [
+              { $ifNull: ["$lastMessageVideo", false] },
+              "Sent a video",
+              {
+                $cond: [
+                  { $ifNull: ["$lastMessageImage", false] },
+                  "Sent an image",
+                  {
+                    $cond: [
+                      { $gt: [{ $strLenCP: { $ifNull: ["$lastMessageText", ""] } }, 0] },
+                      "$lastMessageText",
+                      "",
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      // 7. Remove sensitive fields and keep the user profile plus the preview.
+      { $project: { user: 0, lastMessageText: 0, lastMessageImage: 0, lastMessageVideo: 0 } },
     ]);
 
     res.status(200).json(conversations);

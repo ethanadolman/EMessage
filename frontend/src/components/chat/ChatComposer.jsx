@@ -1,9 +1,11 @@
 import { Button, TextArea } from "@heroui/react";
 import { ImageIcon, LoaderIcon, SendHorizontalIcon } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import useKeyboardSound from "../../hooks/useKeyboardSound";
 import { useChatStore } from "../../store/useChatStore";
 import { useSelectedConversation } from "../../hooks/useSelectedConversation";
+import { useAuthStore } from "../../store/useAuthStore";
 
 export function ChatComposer() {
   const composerText = useChatStore((state) => state.composerText);
@@ -15,19 +17,82 @@ export function ChatComposer() {
   const { activeConversationId } = useSelectedConversation();
   const { playRandomKeyStrokeSound } = useKeyboardSound();
   const mediaInputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const sendCooldownRef = useRef(false);
+  const sendCooldownTimeoutRef = useRef(null);
+  const [isCooldownFeedbackVisible, setIsCooldownFeedbackVisible] = useState(false);
+  const socket = useAuthStore((state) => state.socket);
 
   const playSoundIfEnabled = () => {
     if (isSoundEnabled) playRandomKeyStrokeSound();
   };
 
+  const stopTyping = () => {
+    if (typingTimeoutRef.current) {
+      window.clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
+    if (socket?.connected && activeConversationId) {
+      socket.emit("stopTyping", { receiverId: activeConversationId });
+    }
+  };
+
+  const resetSendCooldown = () => {
+    if (sendCooldownTimeoutRef.current) {
+      window.clearTimeout(sendCooldownTimeoutRef.current);
+    }
+    sendCooldownTimeoutRef.current = null;
+    sendCooldownRef.current = false;
+  };
+
   const handleSend = async () => {
+    const trimmedText = composerText.trim();
+
+    if (!trimmedText) return;
+
+    if (sendCooldownRef.current) {
+      setIsCooldownFeedbackVisible(true);
+      toast.error("Slow down!");
+      window.setTimeout(() => setIsCooldownFeedbackVisible(false), 450);
+      return;
+    }
+
+    sendCooldownRef.current = true;
+    stopTyping();
     const didSendMessage = await sendTextMessage(activeConversationId);
-    if (didSendMessage) playSoundIfEnabled();
+    if (didSendMessage) {
+      playSoundIfEnabled();
+    }
+
+    if (sendCooldownTimeoutRef.current) {
+      window.clearTimeout(sendCooldownTimeoutRef.current);
+    }
+
+    sendCooldownTimeoutRef.current = window.setTimeout(() => {
+      resetSendCooldown();
+    }, 500);
   };
 
   const handleComposerTextChange = (event) => {
-    setComposerText(event.target.value);
+    const nextValue = event.target.value;
+    setComposerText(nextValue);
     playSoundIfEnabled();
+
+    if (!socket?.connected || !activeConversationId) return;
+
+    if (typingTimeoutRef.current) {
+      window.clearTimeout(typingTimeoutRef.current);
+    }
+
+    if (nextValue.trim()) {
+      socket.emit("typing", { receiverId: activeConversationId });
+      typingTimeoutRef.current = window.setTimeout(() => {
+        stopTyping();
+      }, 1_500);
+    } else {
+      stopTyping();
+    }
   };
 
   const handleMediaPick = async (event) => {
@@ -42,6 +107,13 @@ export function ChatComposer() {
 
     if (didSendMessage) playSoundIfEnabled();
   };
+
+  useEffect(() => {
+    return () => {
+      stopTyping();
+      resetSendCooldown();
+    };
+  }, [activeConversationId]);
 
   return (
     <footer className="shrink-0 border-t border-border px-1.5 pb-2 pt-2 sm:px-2">
@@ -77,12 +149,15 @@ export function ChatComposer() {
         </Button>
         <TextArea
           fullWidth
-          variant="secondary"
+          variant="bordered"
           placeholder="EMessage"
           rows={1}
           value={composerText}
           classNames={{ input: "resize-none" }}
           style={{ resize: "none" }}
+          className={`flex-1 rounded-full transition-all ${
+            isCooldownFeedbackVisible ? "animate-[composer-cooldown-shake_0.35s_ease-in-out]" : ""
+          }`}
           onChange={handleComposerTextChange}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -90,7 +165,6 @@ export function ChatComposer() {
               handleSend();
             }
           }}
-          className="flex-1 rounded-full"
         />
 
         <Button variant="primary" isIconOnly isDisabled={!composerText.trim()} onPress={handleSend}>

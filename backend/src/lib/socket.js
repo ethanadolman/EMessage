@@ -10,7 +10,7 @@ const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
 const io = new Server(server, { cors: { origin: [allowedOrigin] } });
 
 function getReceiverSocketId(userId) {
-  return userSocketMap[userId];
+  return userSocketMap[userId]?.socketId;
 }
 
 // Presence state: { userId: { socketId, status } }
@@ -56,6 +56,20 @@ io.on("connection", (socket) => {
   socket.on("idle", () => {
     if (userId) {
       setUserStatus(userId, socket.id, "idle");
+    }
+  });
+
+  socket.on("typing", ({ receiverId }) => {
+    const receiverSocketId = getReceiverSocketId(receiverId);
+    if (receiverSocketId && userId) {
+      io.to(receiverSocketId).emit("typing", { senderId: userId });
+    }
+  });
+
+  socket.on("stopTyping", ({ receiverId }) => {
+    const receiverSocketId = getReceiverSocketId(receiverId);
+    if (receiverSocketId && userId) {
+      io.to(receiverSocketId).emit("stopTyping", { senderId: userId });
     }
   });
 

@@ -15,6 +15,8 @@ function ChatPage() {
   const getUsers = useChatStore((state) => state.getUsers);
   const subscribeToMessages = useChatStore((state) => state.subscribeToMessages);
   const unsubscribeFromMessages = useChatStore((state) => state.unsubscribeFromMessages);
+  const subscribeToTyping = useChatStore((state) => state.subscribeToTyping);
+  const unsubscribeFromTyping = useChatStore((state) => state.unsubscribeFromTyping);
 
   const { activeConversation, activeConversationId, isLargeScreen } = useSelectedConversation();
 
@@ -24,14 +26,25 @@ function ChatPage() {
   }, [getConversations, getUsers]);
 
   useEffect(() => {
+    subscribeToTyping();
+
+    return () => unsubscribeFromTyping();
+  }, [subscribeToTyping, unsubscribeFromTyping]);
+
+  useEffect(() => {
+    subscribeToMessages();
+
+    return () => unsubscribeFromMessages();
+  }, [subscribeToMessages, unsubscribeFromMessages]);
+
+  useEffect(() => {
     if (!activeConversationId) return;
 
     getMessages(activeConversationId);
-    subscribeToMessages(activeConversationId);
 
     // cleanup
-    return () => unsubscribeFromMessages();
-  }, [getMessages, activeConversationId, subscribeToMessages, unsubscribeFromMessages]);
+    return undefined;
+  }, [getMessages, activeConversationId]);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden p-2 sm:p-3 md:p-8" style={frameStyle}>

@@ -21,6 +21,7 @@ export const useChatStore = create(
       composerText: "",
       isSoundEnabled: true,
       isSendingMedia: false,
+      typingUsers: {},
 
       getUsers: async () => {
         set({ isUsersLoading: true });
@@ -80,26 +81,37 @@ export const useChatStore = create(
         }
       },
 
-      subscribeToMessages: (userId) => {
+      subscribeToMessages: () => {
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
 
         socket.off("newMessage");
 
         socket.on("newMessage", (newMessage) => {
-
-          const { selectedUser } = get();
+          const { selectedUser, activeConversationId } = get();
+          const authUserId = useAuthStore.getState().authUser?._id;
+          const conversationPartnerId =
+            String(newMessage.senderId) === String(authUserId)
+              ? String(newMessage.receiverId)
+              : String(newMessage.senderId);
+          const selectedConversationId = selectedUser ? String(selectedUser._id) : null;
+          const isMatchingOpenConversation =
+            activeConversationId && String(activeConversationId) === conversationPartnerId;
 
           // Always refresh sidebar
           get().getConversations();
 
-          // Only append if this conversation is currently open
-          if (
-            selectedUser &&
-            String(newMessage.senderId) === String(selectedUser._id)
-          ) {
+          // Refresh the active thread if this message belongs to it
+          if (isMatchingOpenConversation || selectedConversationId === conversationPartnerId) {
+            get().getMessages(conversationPartnerId);
+          }
+
+          // Also append immediately if the conversation is currently open
+          if (selectedConversationId === conversationPartnerId) {
             set((state) => ({
-              messages: [...state.messages, newMessage],
+              messages: state.messages.some((message) => message._id === newMessage._id)
+                ? state.messages
+                : [...state.messages, newMessage],
             }));
           }
         });
@@ -108,6 +120,32 @@ export const useChatStore = create(
       unsubscribeFromMessages: () => {
         const socket = useAuthStore.getState().socket;
         socket?.off("newMessage");
+      },
+
+      subscribeToTyping: () => {
+        const socket = useAuthStore.getState().socket;
+        if (!socket) return;
+
+        socket.off("typing");
+        socket.off("stopTyping");
+
+        socket.on("typing", ({ senderId }) => {
+          if (senderId) {
+            get().setTypingUser(senderId, true);
+          }
+        });
+
+        socket.on("stopTyping", ({ senderId }) => {
+          if (senderId) {
+            get().setTypingUser(senderId, false);
+          }
+        });
+      },
+
+      unsubscribeFromTyping: () => {
+        const socket = useAuthStore.getState().socket;
+        socket?.off("typing");
+        socket?.off("stopTyping");
       },
 
       setSelectedUser: (selectedUser) => set({ selectedUser }),
@@ -127,6 +165,18 @@ export const useChatStore = create(
       setSidebarTab: (sidebarTab) => set({ sidebarTab }),
       setComposerText: (composerText) => set({ composerText }),
       setSoundEnabled: (isSoundEnabled) => set({ isSoundEnabled }),
+      setTypingUser: (userId, isTyping) =>
+        set((state) => {
+          const nextTypingUsers = { ...state.typingUsers };
+
+          if (isTyping) {
+            nextTypingUsers[userId] = true;
+          } else {
+            delete nextTypingUsers[userId];
+          }
+
+          return { typingUsers: nextTypingUsers };
+        }),
 
       sendTextMessage: async (conversationId) => {
         const messageText = get().composerText.trim();
