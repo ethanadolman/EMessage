@@ -1,7 +1,6 @@
 import { Button, TextArea } from "@heroui/react";
 import { ImageIcon, LoaderIcon, SendHorizontalIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import toast from "react-hot-toast";
+import { useEffect, useRef } from "react";
 import useKeyboardSound from "../../hooks/useKeyboardSound";
 import { useChatStore } from "../../store/useChatStore";
 import { useSelectedConversation } from "../../hooks/useSelectedConversation";
@@ -18,9 +17,6 @@ export function ChatComposer() {
   const { playRandomKeyStrokeSound } = useKeyboardSound();
   const mediaInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-  const sendCooldownRef = useRef(false);
-  const sendCooldownTimeoutRef = useRef(null);
-  const [isCooldownFeedbackVisible, setIsCooldownFeedbackVisible] = useState(false);
   const socket = useAuthStore((state) => state.socket);
 
   const playSoundIfEnabled = () => {
@@ -38,40 +34,16 @@ export function ChatComposer() {
     }
   };
 
-  const resetSendCooldown = () => {
-    if (sendCooldownTimeoutRef.current) {
-      window.clearTimeout(sendCooldownTimeoutRef.current);
-    }
-    sendCooldownTimeoutRef.current = null;
-    sendCooldownRef.current = false;
-  };
-
   const handleSend = async () => {
     const trimmedText = composerText.trim();
 
     if (!trimmedText) return;
 
-    if (sendCooldownRef.current) {
-      setIsCooldownFeedbackVisible(true);
-      toast.error("Slow down!");
-      window.setTimeout(() => setIsCooldownFeedbackVisible(false), 450);
-      return;
-    }
-
-    sendCooldownRef.current = true;
     stopTyping();
     const didSendMessage = await sendTextMessage(activeConversationId);
     if (didSendMessage) {
       playSoundIfEnabled();
     }
-
-    if (sendCooldownTimeoutRef.current) {
-      window.clearTimeout(sendCooldownTimeoutRef.current);
-    }
-
-    sendCooldownTimeoutRef.current = window.setTimeout(() => {
-      resetSendCooldown();
-    }, 500);
   };
 
   const handleComposerTextChange = (event) => {
@@ -111,7 +83,6 @@ export function ChatComposer() {
   useEffect(() => {
     return () => {
       stopTyping();
-      resetSendCooldown();
     };
   }, [activeConversationId]);
 
@@ -155,9 +126,7 @@ export function ChatComposer() {
           value={composerText}
           classNames={{ input: "resize-none" }}
           style={{ resize: "none" }}
-          className={`flex-1 rounded-full transition-all ${
-            isCooldownFeedbackVisible ? "animate-[composer-cooldown-shake_0.35s_ease-in-out]" : ""
-          }`}
+          className="flex-1 rounded-full transition-all"
           onChange={handleComposerTextChange}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
