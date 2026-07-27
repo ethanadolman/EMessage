@@ -22,6 +22,7 @@ export const useChatStore = create(
       isSoundEnabled: true,
       isSendingMedia: false,
       typingUsers: {},
+      unreadCounts: {},
 
       getUsers: async () => {
         set({ isUsersLoading: true });
@@ -97,13 +98,16 @@ export const useChatStore = create(
           const selectedConversationId = selectedUser ? String(selectedUser._id) : null;
           const isMatchingOpenConversation =
             activeConversationId && String(activeConversationId) === conversationPartnerId;
+          const isOpenConversation = isMatchingOpenConversation || selectedConversationId === conversationPartnerId;
 
           // Always refresh sidebar
           get().getConversations();
 
-          // Refresh the active thread if this message belongs to it
-          if (isMatchingOpenConversation || selectedConversationId === conversationPartnerId) {
+          if (isOpenConversation) {
             get().getMessages(conversationPartnerId);
+            get().clearUnreadCount(conversationPartnerId);
+          } else {
+            get().incrementUnreadCount(conversationPartnerId);
           }
 
           // Also append immediately if the conversation is currently open
@@ -159,6 +163,10 @@ export const useChatStore = create(
             null,
           messages: activeConversationId ? state.messages : [],
         }));
+
+        if (activeConversationId) {
+          get().clearUnreadCount(activeConversationId);
+        }
       },
 
       setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -176,6 +184,28 @@ export const useChatStore = create(
           }
 
           return { typingUsers: nextTypingUsers };
+        }),
+
+      incrementUnreadCount: (userId) =>
+        set((state) => {
+          if (!userId) return state;
+
+          return {
+            unreadCounts: {
+              ...state.unreadCounts,
+              [userId]: (state.unreadCounts[userId] || 0) + 1,
+            },
+          };
+        }),
+
+      clearUnreadCount: (userId) =>
+        set((state) => {
+          if (!userId) return state;
+
+          const nextUnreadCounts = { ...state.unreadCounts };
+          delete nextUnreadCounts[userId];
+
+          return { unreadCounts: nextUnreadCounts };
         }),
 
       sendTextMessage: async (conversationId) => {
@@ -201,7 +231,10 @@ export const useChatStore = create(
     }),
     {
       name: "imessage-storage",
-      partialize: (state) => ({ isSoundEnabled: state.isSoundEnabled }),
+      partialize: (state) => ({
+        isSoundEnabled: state.isSoundEnabled,
+        unreadCounts: state.unreadCounts,
+      }),
     },
   ),
 );

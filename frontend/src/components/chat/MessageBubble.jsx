@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Modal, useOverlayState } from "@heroui/react";
-import { XIcon } from "lucide-react";
+import { DownloadIcon, XIcon } from "lucide-react";
 import { withTransform } from "../../lib/imagekit";
 import { MessageVideo } from "./MessageVideo";
 
@@ -51,18 +51,58 @@ export function MessageBubble({ message, onImageLoad }) {
         }`}
       >
         {hasImage ? (
-          <button
-            type="button"
-            className="mb-1.5 block cursor-zoom-in rounded-lg"
-            onClick={() => previewModal.open()}
-          >
-            <img
-              src={previewImageUrl}
-              alt=""
-              onLoad={onImageLoad}
-              className="max-h-40 max-w-full rounded-lg object-cover sm:max-h-52 sm:rounded-xl"
-            />
-          </button>
+          <div className="relative mb-1.5">
+            <button
+              type="button"
+              className="block cursor-zoom-in rounded-lg"
+              onClick={() => previewModal.open()}
+            >
+              <img
+                src={previewImageUrl}
+                alt=""
+                onLoad={onImageLoad}
+                className="max-h-40 max-w-full rounded-lg object-cover sm:max-h-52 sm:rounded-xl"
+              />
+            </button>
+            {!isOwnMessage ? (
+              <Button
+                isIconOnly
+                size="sm"
+                variant="solid"
+                color="primary"
+                className="absolute bottom-2 right-2 shadow-lg"
+                onPress={async () => {
+                  const filename = `image-${message._id || "download"}`;
+
+                  try {
+                    const response = await fetch(message.imageUrl, { mode: "cors" });
+                    if (!response.ok) throw new Error("Failed to fetch image");
+
+                    const blob = await response.blob();
+                    const objectUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = objectUrl;
+                    link.download = filename;
+                    link.style.display = "none";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(objectUrl);
+                  } catch {
+                    const link = document.createElement("a");
+                    link.href = message.imageUrl;
+                    link.download = filename;
+                    link.style.display = "none";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }
+                }}
+              >
+                <DownloadIcon className="size-4" />
+              </Button>
+            ) : null}
+          </div>
         ) : null}
         {hasVideo ? <MessageVideo src={message.videoUrl} /> : null}
         {message.text ? (
