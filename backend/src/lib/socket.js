@@ -15,7 +15,7 @@ function getReceiverSocketId(userId) {
 
 // Presence state: { userId: { socketId, status } }
 const userSocketMap = {};
-const IDLE_TIMEOUT_MS = 120_000;
+const IDLE_TIMEOUT_MS = Number(process.env.IDLE_TIMEOUT_MS || 300_000);
 
 function broadcastPresence() {
   const presence = Object.entries(userSocketMap).reduce((acc, [userId, state]) => {

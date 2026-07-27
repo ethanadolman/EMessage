@@ -3,7 +3,8 @@ import { axiosInstance } from "../lib/axios";
 import { io } from "socket.io-client";
 
 const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:3000" : "/";
-const IDLE_TIMEOUT_MS = 120_000;
+const DEFAULT_IDLE_TIMEOUT_MS = 120_000;
+const MOBILE_IDLE_TIMEOUT_MS = 300_000;
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,
@@ -42,6 +43,12 @@ export const useAuthStore = create((set, get) => ({
 
     let idleTimer = null;
 
+    const isMobileDevice = () =>
+      window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+
+    const getIdleTimeout = () =>
+      isMobileDevice() ? MOBILE_IDLE_TIMEOUT_MS : DEFAULT_IDLE_TIMEOUT_MS;
+
     const resetActivity = () => {
       if (!socket.connected) return;
       socket.emit("activity");
@@ -49,11 +56,28 @@ export const useAuthStore = create((set, get) => ({
       idleTimer = window.setTimeout(() => {
         console.log("🟡 User went idle");
         socket.emit("idle");
-      }, IDLE_TIMEOUT_MS);
+      }, getIdleTimeout());
     };
 
-    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"];
+    const events = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "touchmove",
+      "scroll",
+      "click",
+      "pointerdown",
+      "pointermove",
+      "focus",
+      "pageshow",
+    ];
     events.forEach((eventName) => window.addEventListener(eventName, resetActivity, { passive: true }));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        resetActivity();
+      }
+    });
 
     socket.on("connect", () => {
       console.log("🟢 Connected:", socket.id);

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Button, Modal, useOverlayState } from "@heroui/react";
 import { XIcon } from "lucide-react";
 import { withTransform } from "../../lib/imagekit";
@@ -11,8 +12,33 @@ export function MessageBubble({ message, onImageLoad }) {
   const hasImage = Boolean(message.imageUrl);
   const hasVideo = Boolean(message.videoUrl);
   const previewModal = useOverlayState();
+  const [previewDimensions, setPreviewDimensions] = useState({ width: 0, height: 0 });
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
   const previewImageUrl = hasImage ? withTransform(message.imageUrl, IMAGE_TRANSFORM) : undefined;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const updateViewport = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
+
+  const previewStyle =
+    previewDimensions.width && previewDimensions.height
+      ? {
+          maxWidth: `${Math.min(previewDimensions.width, Math.max(320, viewport.width * 0.95))}px`,
+          maxHeight: `${Math.min(previewDimensions.height, Math.max(240, viewport.height * 0.85))}px`,
+          width: "auto",
+          height: "auto",
+        }
+      : undefined;
 
   return (
     <>
@@ -54,8 +80,8 @@ export function MessageBubble({ message, onImageLoad }) {
     {hasImage ? (
       <Modal.Root state={previewModal}>
         <Modal.Backdrop variant="opaque">
-          <Modal.Container placement="center" className="w-auto max-w-[95vw] p-2 sm:p-4">
-            <Modal.Dialog className="overflow-hidden rounded-2xl border border-white/10 bg-[#111113] text-foreground shadow-2xl">
+          <Modal.Container placement="center" className="w-fit max-w-[95vw] p-2 sm:p-4">
+            <Modal.Dialog className="w-fit max-w-[95vw] overflow-hidden rounded-2xl border border-white/10 bg-[#111113] text-foreground shadow-2xl">
               <Modal.Header className="flex items-center justify-end border-b border-white/10 px-3 py-2">
                 <Button
                   isIconOnly
@@ -70,7 +96,12 @@ export function MessageBubble({ message, onImageLoad }) {
                 <img
                   src={message.imageUrl}
                   alt=""
-                  className="max-h-[85dvh] max-w-[95vw] rounded-lg object-contain"
+                  onLoad={(event) => {
+                    const { naturalWidth, naturalHeight } = event.currentTarget;
+                    setPreviewDimensions({ width: naturalWidth, height: naturalHeight });
+                  }}
+                  style={previewStyle}
+                  className="block h-auto w-auto max-h-[85dvh] max-w-[95vw] rounded-lg object-contain"
                 />
               </Modal.Body>
             </Modal.Dialog>
