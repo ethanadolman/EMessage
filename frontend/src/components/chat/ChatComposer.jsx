@@ -3,7 +3,7 @@ import { ImageIcon, LoaderIcon, SendHorizontalIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import useKeyboardSound from "../../hooks/useKeyboardSound";
 import { useChatStore } from "../../store/useChatStore";
-import { useSelectedConversation } from "../../hooks/useSelectedConversation";
+import { useActiveConversationId } from "../../hooks/useSelectedConversation";
 import { useAuthStore } from "../../store/useAuthStore";
 
 export function ChatComposer() {
@@ -13,10 +13,11 @@ export function ChatComposer() {
   const isSendingMedia = useChatStore((state) => state.isSendingMedia);
   const sendTextMessage = useChatStore((state) => state.sendTextMessage);
   const setComposerText = useChatStore((state) => state.setComposerText);
-  const { activeConversationId } = useSelectedConversation();
+  const activeConversationId = useActiveConversationId();
   const { playRandomKeyStrokeSound } = useKeyboardSound();
   const mediaInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const isTypingActiveRef = useRef(false);
   const socket = useAuthStore((state) => state.socket);
 
   const playSoundIfEnabled = () => {
@@ -29,9 +30,11 @@ export function ChatComposer() {
       typingTimeoutRef.current = null;
     }
 
-    if (socket?.connected && activeConversationId) {
+    if (isTypingActiveRef.current && socket?.connected && activeConversationId) {
       socket.emit("stopTyping", { receiverId: activeConversationId });
     }
+
+    isTypingActiveRef.current = false;
   };
 
   const handleSend = async () => {
@@ -51,14 +54,23 @@ export function ChatComposer() {
     setComposerText(nextValue);
     playSoundIfEnabled();
 
-    if (!socket?.connected || !activeConversationId) return;
+    if (!socket?.connected || !activeConversationId) {
+      if (!nextValue.trim()) {
+        isTypingActiveRef.current = false;
+      }
+      return;
+    }
 
     if (typingTimeoutRef.current) {
       window.clearTimeout(typingTimeoutRef.current);
     }
 
     if (nextValue.trim()) {
-      socket.emit("typing", { receiverId: activeConversationId });
+      if (!isTypingActiveRef.current) {
+        socket.emit("typing", { receiverId: activeConversationId });
+        isTypingActiveRef.current = true;
+      }
+
       typingTimeoutRef.current = window.setTimeout(() => {
         stopTyping();
       }, 1_500);
@@ -81,10 +93,14 @@ export function ChatComposer() {
   };
 
   useEffect(() => {
+    isTypingActiveRef.current = false;
+
     return () => {
       stopTyping();
     };
   }, [activeConversationId]);
+
+  const canSend = Boolean(composerText.trim());
 
   return (
     <footer className="shrink-0 border-t border-border px-1.5 pb-2 pt-2 sm:px-2">
@@ -136,7 +152,7 @@ export function ChatComposer() {
           }}
         />
 
-        <Button variant="primary" isIconOnly isDisabled={!composerText.trim()} onPress={handleSend}>
+        <Button variant="primary" isIconOnly isDisabled={!canSend} onPress={handleSend}>
           <SendHorizontalIcon className="size-5" />
         </Button>
       </div>

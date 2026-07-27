@@ -10,18 +10,24 @@ import { WallpaperPicker } from "../WallpaperPicker";
 import { TypingIndicator } from "./TypingIndicator";
 
 import { useChatStore } from "../../store/useChatStore";
-import { useSelectedConversation } from "../../hooks/useSelectedConversation";
+import {
+  useActiveConversationId,
+  useActiveConversationPeer,
+  useIsLargeScreen,
+} from "../../hooks/useSelectedConversation";
 
 export function ChatHeader() {
   const isSoundEnabled = useChatStore((state) => state.isSoundEnabled);
   const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
   const setSoundEnabled = useChatStore((state) => state.setSoundEnabled);
 
-  const { activeConversation, isLargeScreen } = useSelectedConversation();
+  const activeConversationId = useActiveConversationId();
+  const peer = useActiveConversationPeer();
+  const isLargeScreen = useIsLargeScreen();
 
   return (
     <header className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center gap-1 border-b border-border px-1.5 py-1.5 sm:gap-2 sm:px-2 sm:py-2">
-      {activeConversation && !isLargeScreen ? (
+      {peer && !isLargeScreen ? (
         <Button
           variant="ghost"
           size="sm"
@@ -33,33 +39,26 @@ export function ChatHeader() {
         </Button>
       ) : null}
 
-      {activeConversation ? (
+      {peer ? (
         <>
           <AvatarWithOnlineIndicator
-            isOnline={activeConversation.peer.isOnline ?? true}
-            isIdle={activeConversation.peer.isIdle ?? false}
+            isOnline={peer.isOnline ?? true}
+            isIdle={peer.isIdle ?? false}
           >
             <Avatar className="size-9 shrink-0">
-              <Avatar.Image
-                alt={activeConversation.peer.name}
-                src={activeConversation.peer.avatarUrl}
-              />
-              <Avatar.Fallback className="text-sm font-medium">
-                {activeConversation.peer.initials}
-              </Avatar.Fallback>
+              <Avatar.Image alt={peer.name} src={peer.avatarUrl} />
+              <Avatar.Fallback className="text-sm font-medium">{peer.initials}</Avatar.Fallback>
             </Avatar>
           </AvatarWithOnlineIndicator>
 
           <div className="flex-1 text-center sm:text-left">
-            <p className="truncate text-[15px] font-semibold leading-tight">
-              {activeConversation.peer.name}
-            </p>
+            <p className="truncate text-[15px] font-semibold leading-tight">{peer.name}</p>
             <p className="truncate text-xs text-muted">
-              {activeConversation.peer.isTyping ? (
+              {peer.isTyping ? (
                 <TypingIndicator className="font-medium text-accent" />
-              ) : activeConversation.peer.isIdle ? (
+              ) : peer.isIdle ? (
                 <span className="font-medium text-amber-500">Idle</span>
-              ) : activeConversation.peer.isOnline ? (
+              ) : peer.isOnline ? (
                 <span className="font-medium text-success">Online</span>
               ) : (
                 "Offline"
@@ -99,7 +98,7 @@ export function ChatHeader() {
           )}
         </Button>
 
-        {activeConversation ? (
+        {activeConversationId ? (
           <Button
             variant="ghost"
             size="sm"

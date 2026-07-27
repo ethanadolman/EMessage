@@ -1,12 +1,16 @@
+import { memo, useMemo } from "react";
 import { Avatar } from "@heroui/react";
 import { AvatarWithOnlineIndicator } from "./AvatarWithOnlineIndicator";
 import { TypingIndicator } from "./TypingIndicator";
+import { useChatStore } from "../../store/useChatStore";
 
-export function ConversationRow({ user, selected, onSelect }) {
+function ConversationRowComponent({ user, selected }) {
+  const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
+
   return (
     <button
       type="button"
-      onClick={onSelect}
+      onClick={() => setActiveConversationId(user.id)}
       className={`flex w-full items-center gap-3 border-b border-border px-3 py-2.5 text-left ${
         selected ? "bg-accent-soft" : ""
       }`}
@@ -36,3 +40,5 @@ export function ConversationRow({ user, selected, onSelect }) {
     </button>
   );
 }
+
+export const ConversationRow = memo(ConversationRowComponent);

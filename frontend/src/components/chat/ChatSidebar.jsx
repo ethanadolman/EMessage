@@ -1,4 +1,5 @@
-import { getInitials, useSelectedConversation } from "../../hooks/useSelectedConversation";
+import { memo, useMemo } from "react";
+import { getInitials, useActiveConversationId, useIsLargeScreen } from "../../hooks/useSelectedConversation";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useChatStore } from "../../store/useChatStore";
 import { APP_NAME, AppLogo } from "../AppLogo";
@@ -8,7 +9,7 @@ import { SearchField, Tabs } from "@heroui/react";
 import { MessageSquareIcon, UsersIcon } from "lucide-react";
 import { ConversationRow } from "./ConversationRow";
 
-function mapUserForList(user, onlineUsers, presenceMap, typingUsers, unreadCounts) {
+function mapUserForList(user, onlineUserSet, presenceMap, typingUsers, unreadCounts) {
   const preview = typingUsers?.[user._id]
     ? "Typing..."
     : user.lastMessagePreview || "";
@@ -19,7 +20,7 @@ function mapUserForList(user, onlineUsers, presenceMap, typingUsers, unreadCount
     name: user.fullName,
     avatarUrl: user.profilePic,
     initials: getInitials(user.fullName),
-    isOnline: onlineUsers.includes(user._id),
+    isOnline: onlineUserSet.has(user._id),
     isIdle: presenceMap?.[user._id] === "idle",
     isTyping: Boolean(typingUsers?.[user._id]),
     unreadCount: unreadCounts?.[user._id] || 0,
@@ -28,7 +29,7 @@ function mapUserForList(user, onlineUsers, presenceMap, typingUsers, unreadCount
       name: user.fullName,
       avatarUrl: user.profilePic,
       initials: getInitials(user.fullName),
-      isOnline: onlineUsers.includes(user._id),
+      isOnline: onlineUserSet.has(user._id),
       isIdle: presenceMap?.[user._id] === "idle",
     },
   };
@@ -36,43 +37,46 @@ function mapUserForList(user, onlineUsers, presenceMap, typingUsers, unreadCount
 
 function ChatSidebar() {
   const conversations = useChatStore((state) => state.conversations);
-
-  console.log(conversations);
   const users = useChatStore((state) => state.users);
-
   const searchQuery = useChatStore((state) => state.searchQuery);
   const setSearchQuery = useChatStore((state) => state.setSearchQuery);
-
   const sidebarTab = useChatStore((state) => state.sidebarTab);
   const setSidebarTab = useChatStore((state) => state.setSidebarTab);
-
-  const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
-
-  const onlineUsers = useAuthStore((state) => state.onlineUsers);
-  const presenceMap = useAuthStore((state) => state.presenceMap);
   const typingUsers = useChatStore((state) => state.typingUsers);
   const unreadCounts = useChatStore((state) => state.unreadCounts);
+  const onlineUsers = useAuthStore((state) => state.onlineUsers);
+  const presenceMap = useAuthStore((state) => state.presenceMap);
 
-  const { activeConversationId, isLargeScreen } = useSelectedConversation();
+  const activeConversationId = useActiveConversationId();
+  const isLargeScreen = useIsLargeScreen();
+
+  const onlineUserSet = useMemo(() => new Set(onlineUsers), [onlineUsers]);
+
+  const conversationUsers = useMemo(
+    () => conversations.map((user) => mapUserForList(user, onlineUserSet, presenceMap, typingUsers, unreadCounts)),
+    [conversations, onlineUserSet, presenceMap, typingUsers, unreadCounts],
+  );
+
+  const allUsers = useMemo(
+    () => users.map((user) => mapUserForList(user, onlineUserSet, presenceMap, typingUsers, unreadCounts)),
+    [users, onlineUserSet, presenceMap, typingUsers, unreadCounts],
+  );
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
 
-  const conversationUsers = conversations.map((user) =>
-    mapUserForList(user, onlineUsers, presenceMap, typingUsers, unreadCounts),
-  );
-  const allUsers = users.map((user) =>
-    mapUserForList(user, onlineUsers, presenceMap, typingUsers, unreadCounts),
-  );
+  const filteredConversations = useMemo(() => {
+    if (!normalizedSearchQuery) return conversationUsers;
 
-  const filteredConversations = normalizedSearchQuery
-    ? conversationUsers.filter((conversation) =>
-        conversation.peer.name.toLowerCase().includes(normalizedSearchQuery),
-      )
-    : conversationUsers;
+    return conversationUsers.filter((conversation) =>
+      conversation.peer.name.toLowerCase().includes(normalizedSearchQuery),
+    );
+  }, [conversationUsers, normalizedSearchQuery]);
 
-  const filteredUsers = normalizedSearchQuery
-    ? allUsers.filter((user) => user.name.toLowerCase().includes(normalizedSearchQuery))
-    : allUsers;
+  const filteredUsers = useMemo(() => {
+    if (!normalizedSearchQuery) return allUsers;
+
+    return allUsers.filter((user) => user.name.toLowerCase().includes(normalizedSearchQuery));
+  }, [allUsers, normalizedSearchQuery]);
 
   return (
     <aside
@@ -145,7 +149,6 @@ function ChatSidebar() {
                 key={conversation.id}
                 user={conversation}
                 selected={conversation.id === activeConversationId}
-                onSelect={() => setActiveConversationId(conversation.id)}
               />
             ))
           )}
@@ -160,7 +163,6 @@ function ChatSidebar() {
                 key={user.conversationId}
                 user={user}
                 selected={user.conversationId === activeConversationId}
-                onSelect={() => setActiveConversationId(user.conversationId)}
               />
             ))
           )}
@@ -169,4 +171,5 @@ function ChatSidebar() {
     </aside>
   );
 }
-export default ChatSidebar;
+
+export default memo(ChatSidebar);

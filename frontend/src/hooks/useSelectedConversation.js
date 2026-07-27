@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMediaQuery } from "./useMediaQuery";
 import { formatMessageTime } from "../lib/utils";
 import { useChatStore } from "../store/useChatStore";
@@ -12,65 +13,91 @@ export function getInitials(name) {
     .join("");
 }
 
-// mapUserToConversation is an adapter — it converts the raw backend shapes (a user document + an array of message documents) into the clean view-model that the chat UI components expect to render.
-
-// Two transformations happen:
-// 1. Messages → UI messages
-// 2. User → peer
-
-function mapUserToConversation({ user, messages, authUser, onlineUsers, presenceMap, typingUsers }) {
-  const mappedMessages = messages.map((message) => ({
+function mapMessage(message, authUserId) {
+  return {
     id: message._id,
-    role: String(message.senderId) === String(authUser?._id) ? "me" : "them",
+    role: String(message.senderId) === String(authUserId) ? "me" : "them",
     text: message.text || "",
     time: formatMessageTime(message.createdAt),
+    createdAt: message.createdAt,
     imageUrl: message.image,
     videoUrl: message.video,
-  }));
-
-  return {
-    id: user._id,
-    peer: {
-      name: user.fullName,
-      subtitle: user.email,
-      isOnline: onlineUsers.includes(user._id),
-      isIdle: presenceMap?.[user._id] === "idle",
-      isTyping: typingUsers?.[user._id] ?? false,
-      avatarUrl: user.profilePic,
-      initials: getInitials(user.fullName),
-    },
-    messages: mappedMessages,
   };
 }
 
-export function useSelectedConversation() {
+function useSelectedUser() {
   const activeConversationId = useChatStore((state) => state.activeConversationId);
-  const conversations = useChatStore((state) => state.conversations);
   const users = useChatStore((state) => state.users);
-  const messages = useChatStore((state) => state.messages);
-  const typingUsers = useChatStore((state) => state.typingUsers);
+  const conversations = useChatStore((state) => state.conversations);
 
-  const authUser = useAuthStore((state) => state.authUser);
+  return useMemo(() => {
+    if (!activeConversationId) return null;
+
+    return (
+      users.find((user) => user._id === activeConversationId) ||
+      conversations.find((user) => user._id === activeConversationId) ||
+      null
+    );
+  }, [activeConversationId, users, conversations]);
+}
+
+export function useActiveConversationId() {
+  return useChatStore((state) => state.activeConversationId);
+}
+
+export function useIsLargeScreen() {
+  return useMediaQuery("(min-width: 1024px)");
+}
+
+export function useActiveConversationMessages() {
+  const messages = useChatStore((state) => state.messages);
+  const authUserId = useAuthStore((state) => state.authUser?._id);
+
+  return useMemo(
+    () => messages.map((message) => mapMessage(message, authUserId)),
+    [messages, authUserId],
+  );
+}
+
+export function useActiveConversationPeer() {
+  const selectedUser = useSelectedUser();
+  const activeConversationId = useActiveConversationId();
   const onlineUsers = useAuthStore((state) => state.onlineUsers);
   const presenceMap = useAuthStore((state) => state.presenceMap);
+  const isTyping = useChatStore((state) =>
+    activeConversationId ? Boolean(state.typingUsers[activeConversationId]) : false,
+  );
 
-  const isLargeScreen = useMediaQuery("(min-width: 1024px)");
+  return useMemo(() => {
+    if (!selectedUser) return null;
 
-  const selectedUser = activeConversationId
-    ? users.find((user) => user._id === activeConversationId) ||
-      conversations.find((user) => user._id === activeConversationId)
-    : null;
+    return {
+      name: selectedUser.fullName,
+      subtitle: selectedUser.email,
+      isOnline: onlineUsers.includes(selectedUser._id),
+      isIdle: presenceMap?.[selectedUser._id] === "idle",
+      isTyping,
+      avatarUrl: selectedUser.profilePic,
+      initials: getInitials(selectedUser.fullName),
+    };
+  }, [selectedUser, onlineUsers, presenceMap, isTyping]);
+}
 
-  const activeConversation = selectedUser
-    ? mapUserToConversation({
-        user: selectedUser,
-        messages,
-        authUser,
-        onlineUsers,
-        presenceMap,
-        typingUsers,
-      })
-    : null;
+export function useSelectedConversation() {
+  const activeConversationId = useActiveConversationId();
+  const peer = useActiveConversationPeer();
+  const messages = useActiveConversationMessages();
+  const isLargeScreen = useIsLargeScreen();
+
+  const activeConversation = useMemo(() => {
+    if (!activeConversationId || !peer) return null;
+
+    return {
+      id: activeConversationId,
+      peer,
+      messages,
+    };
+  }, [activeConversationId, peer, messages]);
 
   return {
     activeConversation,

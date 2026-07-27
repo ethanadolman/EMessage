@@ -14,8 +14,10 @@ function buildPosterUrl(url) {
   return withTransform(`${path}/ik-thumbnail.jpg`, POSTER_TRANSFORM);
 }
 
+import { memo } from "react";
+
 /** ImageKit-optimized chat video with an auto-generated poster frame. */
-export function MessageVideo({ src }) {
+function MessageVideoComponent({ src }) {
   const optimizedSrc = withTransform(src, VIDEO_TRANSFORM);
   const posterSrc = buildPosterUrl(src);
 
@@ -30,3 +32,5 @@ export function MessageVideo({ src }) {
     />
   );
 }
+
+export const MessageVideo = memo(MessageVideoComponent);
