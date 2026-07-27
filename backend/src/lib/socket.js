@@ -26,8 +26,11 @@ io.on("connection", (socket) => {
 
   // socket.on is used to listen for events
   socket.on("disconnect", () => {
-    if (userId) delete userSocketMap[userId];
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    // Only remove the user if THIS socket is still the active one
+  if (userId && userSocketMap[userId] === socket.id) {
+    delete userSocketMap[userId];
+  }
+  io.emit("getOnlineUsers", Object.keys(userSocketMap));
   });
 });
 
