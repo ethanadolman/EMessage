@@ -22,6 +22,8 @@ function mapMessage(message, authUserId) {
     createdAt: message.createdAt,
     imageUrl: message.image,
     videoUrl: message.video,
+    audioUrl: message.audio,
+    audioName: message.audioName,
   };
 }
 
@@ -64,6 +66,7 @@ export function useActiveConversationPeer() {
   const activeConversationId = useActiveConversationId();
   const onlineUsers = useAuthStore((state) => state.onlineUsers);
   const presenceMap = useAuthStore((state) => state.presenceMap);
+  const lastOnlineMap = useAuthStore((state) => state.lastOnlineMap);
   const isTyping = useChatStore((state) =>
     activeConversationId ? Boolean(state.typingUsers[activeConversationId]) : false,
   );
@@ -76,11 +79,12 @@ export function useActiveConversationPeer() {
       subtitle: selectedUser.email,
       isOnline: onlineUsers.includes(selectedUser._id),
       isIdle: presenceMap?.[selectedUser._id] === "idle",
+      lastOnlineAt: lastOnlineMap?.[selectedUser._id] || selectedUser.lastOnlineAt,
       isTyping,
       avatarUrl: selectedUser.profilePic,
       initials: getInitials(selectedUser.fullName),
     };
-  }, [selectedUser, onlineUsers, presenceMap, isTyping]);
+  }, [selectedUser, onlineUsers, presenceMap, lastOnlineMap, isTyping]);
 }
 
 export function useSelectedConversation() {

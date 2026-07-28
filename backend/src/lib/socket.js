@@ -1,6 +1,7 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
+import User from "../models/user.model.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -34,10 +35,11 @@ function setUserStatus(userId, socketId, status) {
 }
 
 function clearUserStatus(userId, socketId) {
-  if (!userId || userSocketMap[userId]?.socketId !== socketId) return;
+  if (!userId || userSocketMap[userId]?.socketId !== socketId) return false;
 
   delete userSocketMap[userId];
   broadcastPresence();
+  return true;
 }
 
 io.on("connection", (socket) => {
@@ -74,7 +76,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    clearUserStatus(userId, socket.id);
+    if (!clearUserStatus(userId, socket.id)) return;
+
+    const lastOnlineAt = new Date().toISOString();
+    io.emit("userOffline", { userId, lastOnlineAt });
+    User.findByIdAndUpdate(userId, { lastOnlineAt }).catch((error) => {
+      console.error("Failed to save last online time:", error.message);
+    });
   });
 
   const idleTimer = setInterval(() => {

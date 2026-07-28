@@ -1,7 +1,7 @@
 import { Button, TextArea } from "@heroui/react";
-import { ImageIcon, LoaderIcon, SendHorizontalIcon } from "lucide-react";
+import { PaperclipIcon, LoaderIcon, SendHorizontalIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
-import useKeyboardSound from "../../hooks/useKeyboardSound";
+import useKeyboardSound, { playMessageSentSound } from "../../hooks/useKeyboardSound";
 import { useChatStore } from "../../store/useChatStore";
 import { useActiveConversationId } from "../../hooks/useSelectedConversation";
 import { useAuthStore } from "../../store/useAuthStore";
@@ -45,7 +45,7 @@ export function ChatComposer() {
     stopTyping();
     const didSendMessage = await sendTextMessage(activeConversationId);
     if (didSendMessage) {
-      playSoundIfEnabled();
+      if (isSoundEnabled) playMessageSentSound();
     }
   };
 
@@ -89,7 +89,7 @@ export function ChatComposer() {
       file,
     });
 
-    if (didSendMessage) playSoundIfEnabled();
+    if (didSendMessage && isSoundEnabled) playMessageSentSound();
   };
 
   useEffect(() => {
@@ -118,7 +118,7 @@ export function ChatComposer() {
         <input
           ref={mediaInputRef}
           type="file"
-          accept="image/*,video/*"
+          accept="image/*,video/*,audio/*"
           className="sr-only"
           disabled={isSendingMedia}
           tabIndex={-1}
@@ -131,8 +131,9 @@ export function ChatComposer() {
           isDisabled={isSendingMedia}
           className="size-9 shrink-0 touch-manipulation self-end text-accent"
           onPress={() => mediaInputRef.current?.click()}
+          aria-label="Attach an image, video, or audio file"
         >
-          <ImageIcon className="size-5 sm:size-6" strokeWidth={2} />
+          <PaperclipIcon className="size-5 sm:size-6" strokeWidth={2} />
         </Button>
         <TextArea
           fullWidth

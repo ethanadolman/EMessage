@@ -19,6 +19,8 @@ export async function getUsersForSidebar(req, res) {
 export async function getConversationsForSidebar(req, res) {
   try {
     const loggedInUserId = req.user._id;
+    const pinnedConversationIds = req.user.pinnedConversationIds || [];
+    const hiddenConversationIds = req.user.hiddenConversationIds || [];
 
     const conversations = await Message.aggregate([
       // 1. Keep only the messages I sent or received.
@@ -33,10 +35,13 @@ export async function getConversationsForSidebar(req, res) {
           lastMessageText: { $last: "$text" },
           lastMessageImage: { $last: "$image" },
           lastMessageVideo: { $last: "$video" },
+          lastMessageAudio: { $last: "$audio" },
         },
       },
-      // 4. Put the most recent conversation at the top.
-      { $sort: { lastMessageAt: -1 } },
+      { $match: { _id: { $nin: hiddenConversationIds } } },
+      // 4. Mark favorites, then keep them at the top in recency order.
+      { $addFields: { isPinned: { $in: ["$_id", pinnedConversationIds] } } },
+      { $sort: { isPinned: -1, lastMessageAt: -1 } },
       // 5. Look up each partner's user profile.
       {
         $lookup: {
@@ -55,6 +60,7 @@ export async function getConversationsForSidebar(req, res) {
           fullName: "$user.fullName",
           profilePic: "$user.profilePic",
           email: "$user.email",
+          lastOnlineAt: "$user.lastOnlineAt",
           createdAt: "$user.createdAt",
           updatedAt: "$user.updatedAt",
           lastMessageAt: "$lastMessageAt",
@@ -64,13 +70,19 @@ export async function getConversationsForSidebar(req, res) {
               "Sent a video",
               {
                 $cond: [
-                  { $ifNull: ["$lastMessageImage", false] },
-                  "Sent an image",
+                  { $ifNull: ["$lastMessageAudio", false] },
+                  "Sent an audio file",
                   {
                     $cond: [
-                      { $gt: [{ $strLenCP: { $ifNull: ["$lastMessageText", ""] } }, 0] },
-                      "$lastMessageText",
-                      "",
+                      { $ifNull: ["$lastMessageImage", false] },
+                      "Sent an image",
+                      {
+                        $cond: [
+                          { $gt: [{ $strLenCP: { $ifNull: ["$lastMessageText", ""] } }, 0] },
+                          "$lastMessageText",
+                          "",
+                        ],
+                      },
                     ],
                   },
                 ],
@@ -80,7 +92,15 @@ export async function getConversationsForSidebar(req, res) {
         },
       },
       // 7. Remove sensitive fields and keep the user profile plus the preview.
-      { $project: { user: 0, lastMessageText: 0, lastMessageImage: 0, lastMessageVideo: 0 } },
+      {
+        $project: {
+          user: 0,
+          lastMessageText: 0,
+          lastMessageImage: 0,
+          lastMessageVideo: 0,
+          lastMessageAudio: 0,
+        },
+      },
     ]);
 
     res.status(200).json(conversations);
@@ -117,6 +137,8 @@ export async function sendMessage(req, res) {
 
     let imageUrl;
     let videoUrl;
+    let audioUrl;
+    let audioName;
 
     if (req.file) {
       if (!hasImageKitConfig()) {
@@ -125,6 +147,10 @@ export async function sendMessage(req, res) {
 
       const url = await uploadChatMedia(req.file);
       if (req.file.mimetype.startsWith("video/")) videoUrl = url;
+      else if (req.file.mimetype.startsWith("audio/")) {
+        audioUrl = url;
+        audioName = req.file.originalname;
+      }
       else imageUrl = url;
     }
 
@@ -134,9 +160,17 @@ export async function sendMessage(req, res) {
       text,
       image: imageUrl,
       video: videoUrl,
+      audio: audioUrl,
+      audioName,
     });
 
     await newMessage.save();
+
+    // A new message restores this existing thread for either participant if it was hidden.
+    await Promise.all([
+      User.findByIdAndUpdate(senderId, { $pull: { hiddenConversationIds: receiverId } }),
+      User.findByIdAndUpdate(receiverId, { $pull: { hiddenConversationIds: senderId } }),
+    ]);
 
     const receiverSocketId = getReceiverSocketId(receiverId);
     // only send the message in realtime if user is online
@@ -148,5 +182,41 @@ export async function sendMessage(req, res) {
   } catch (error) {
     console.error("Error in sendMessage:", error.message);
     res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function toggleConversationPin(req, res) {
+  try {
+    const { id: conversationId } = req.params;
+    const isPinned = req.user.pinnedConversationIds?.some(
+      (id) => String(id) === String(conversationId),
+    );
+
+    const update = isPinned
+      ? { $pull: { pinnedConversationIds: conversationId } }
+      : { $addToSet: { pinnedConversationIds: conversationId } };
+    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true });
+
+    res.status(200).json({
+      isPinned: Boolean(user.pinnedConversationIds?.some((id) => String(id) === String(conversationId))),
+    });
+  } catch (error) {
+    console.error("Error toggling conversation pin:", error.message);
+    res.status(500).json({ message: "Failed to update favorite" });
+  }
+}
+
+export async function deleteConversation(req, res) {
+  try {
+    const { id: conversationId } = req.params;
+
+    await User.findByIdAndUpdate(req.user._id, {
+      $addToSet: { hiddenConversationIds: conversationId },
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error deleting conversation:", error.message);
+    res.status(500).json({ message: "Failed to delete chat" });
   }
 }

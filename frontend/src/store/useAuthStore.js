@@ -3,7 +3,7 @@ import { axiosInstance } from "../lib/axios";
 import { io } from "socket.io-client";
 
 const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:3000" : "/";
-const DEFAULT_IDLE_TIMEOUT_MS = 120_000;
+const DEFAULT_IDLE_TIMEOUT_MS = 300_000;
 const MOBILE_IDLE_TIMEOUT_MS = 300_000;
 
 export const useAuthStore = create((set, get) => ({
@@ -11,6 +11,7 @@ export const useAuthStore = create((set, get) => ({
   isCheckingAuth: true,
   onlineUsers: [],
   presenceMap: {},
+  lastOnlineMap: {},
   socket: null,
 
   checkAuth: async () => {
@@ -30,7 +31,7 @@ export const useAuthStore = create((set, get) => ({
   },
 
   clearAuth: () => {
-    set({ authUser: null, isCheckingAuth: false, onlineUsers: [] });
+    set({ authUser: null, isCheckingAuth: false, onlineUsers: [], lastOnlineMap: {} });
     get().disconnectSocket();
   },
 
@@ -101,12 +102,20 @@ export const useAuthStore = create((set, get) => ({
       set({ onlineUsers, presenceMap });
     });
 
+    socket.on("userOffline", ({ userId, lastOnlineAt }) => {
+      if (!userId || !lastOnlineAt) return;
+
+      set((state) => ({
+        lastOnlineMap: { ...state.lastOnlineMap, [userId]: lastOnlineAt },
+      }));
+    });
+
     resetActivity();
   },
 
   disconnectSocket: () => {
     const socket = get().socket;
     if (socket?.connected) socket.disconnect();
-    set({ socket: null, onlineUsers: [], presenceMap: {} });
+    set({ socket: null, onlineUsers: [], presenceMap: {}, lastOnlineMap: {} });
   },
 }));

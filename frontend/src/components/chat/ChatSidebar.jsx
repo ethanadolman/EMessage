@@ -1,11 +1,11 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { getInitials, useActiveConversationId, useIsLargeScreen } from "../../hooks/useSelectedConversation";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useChatStore } from "../../store/useChatStore";
 import { APP_NAME, AppLogo } from "../AppLogo";
 import { UserButton } from "@clerk/react";
 
-import { SearchField, Tabs } from "@heroui/react";
+import { Button, Modal, SearchField, Tabs, useOverlayState } from "@heroui/react";
 import { MessageSquareIcon, UsersIcon } from "lucide-react";
 import { ConversationRow } from "./ConversationRow";
 
@@ -24,6 +24,7 @@ function mapUserForList(user, onlineUserSet, presenceMap, typingUsers, unreadCou
     isIdle: presenceMap?.[user._id] === "idle",
     isTyping: Boolean(typingUsers?.[user._id]),
     unreadCount: unreadCounts?.[user._id] || 0,
+    isPinned: Boolean(user.isPinned),
     preview,
     peer: {
       name: user.fullName,
@@ -44,11 +45,17 @@ function ChatSidebar() {
   const setSidebarTab = useChatStore((state) => state.setSidebarTab);
   const typingUsers = useChatStore((state) => state.typingUsers);
   const unreadCounts = useChatStore((state) => state.unreadCounts);
+  const pinningConversationIds = useChatStore((state) => state.pinningConversationIds);
+  const toggleConversationPin = useChatStore((state) => state.toggleConversationPin);
+  const deletingConversationIds = useChatStore((state) => state.deletingConversationIds);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
   const onlineUsers = useAuthStore((state) => state.onlineUsers);
   const presenceMap = useAuthStore((state) => state.presenceMap);
 
   const activeConversationId = useActiveConversationId();
   const isLargeScreen = useIsLargeScreen();
+  const deleteModal = useOverlayState();
+  const [conversationToDelete, setConversationToDelete] = useState(null);
 
   const onlineUserSet = useMemo(() => new Set(onlineUsers), [onlineUsers]);
 
@@ -77,6 +84,25 @@ function ChatSidebar() {
 
     return allUsers.filter((user) => user.name.toLowerCase().includes(normalizedSearchQuery));
   }, [allUsers, normalizedSearchQuery]);
+
+  const requestDeleteConversation = (conversation) => {
+    setConversationToDelete(conversation);
+    deleteModal.open();
+  };
+
+  const confirmDeleteConversation = async () => {
+    if (!conversationToDelete) return;
+
+    const didDelete = await deleteConversation(conversationToDelete.id);
+    if (didDelete) {
+      deleteModal.close();
+      setConversationToDelete(null);
+    }
+  };
+
+  const isDeletingSelectedConversation = Boolean(
+    conversationToDelete && deletingConversationIds[conversationToDelete.id],
+  );
 
   return (
     <aside
@@ -149,6 +175,12 @@ function ChatSidebar() {
                 key={conversation.id}
                 user={conversation}
                 selected={conversation.id === activeConversationId}
+                isPinning={Boolean(pinningConversationIds[conversation.id])}
+                onTogglePin={() => toggleConversationPin(conversation.id)}
+                isDeleting={Boolean(deletingConversationIds[conversation.id])}
+                onDelete={
+                  conversation.isPinned ? undefined : () => requestDeleteConversation(conversation)
+                }
               />
             ))
           )}
@@ -168,6 +200,37 @@ function ChatSidebar() {
           )}
         </Tabs.Panel>
       </Tabs>
+      <Modal.Root state={deleteModal}>
+        <Modal.Backdrop variant="opaque">
+          <Modal.Container size="sm" placement="center">
+            <Modal.Dialog>
+              <Modal.Header>
+                <Modal.Heading>Delete chat?</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm text-muted">
+                  Remove your chat with {conversationToDelete?.name || "this person"} from the
+                  sidebar? The message history stays intact and returns if either of you sends a
+                  new message.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" onPress={() => deleteModal.close()}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  color="danger"
+                  isDisabled={isDeletingSelectedConversation}
+                  onPress={confirmDeleteConversation}
+                >
+                  {isDeletingSelectedConversation ? "Deleting..." : "Delete chat"}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal.Root>
     </aside>
   );
 }

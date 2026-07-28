@@ -19,6 +19,17 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: "",
     },
+    pinnedConversationIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+    }],
+    hiddenConversationIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+    }],
+    lastOnlineAt: {
+        type: Date,
+    },
 }, 
 {timestamps:true}, // createdAt & updatedAt
 );

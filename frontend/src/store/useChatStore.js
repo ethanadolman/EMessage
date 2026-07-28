@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 
 import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "./useAuthStore";
+import { playMessageReceivedSound } from "../hooks/useKeyboardSound";
 import toast from "react-hot-toast";
 
 export const useChatStore = create(
@@ -21,6 +22,8 @@ export const useChatStore = create(
       composerText: "",
       isSoundEnabled: true,
       isSendingMedia: false,
+      pinningConversationIds: {},
+      deletingConversationIds: {},
       typingUsers: {},
       unreadCounts: {},
 
@@ -82,6 +85,84 @@ export const useChatStore = create(
         }
       },
 
+      toggleConversationPin: async (conversationId) => {
+        const conversation = get().conversations.find((item) => item._id === conversationId);
+        if (!conversation || get().pinningConversationIds[conversationId]) return;
+
+        const previousIsPinned = Boolean(conversation.isPinned);
+        set((state) => ({
+          pinningConversationIds: { ...state.pinningConversationIds, [conversationId]: true },
+          conversations: state.conversations
+            .map((item) =>
+              item._id === conversationId ? { ...item, isPinned: !previousIsPinned } : item,
+            )
+            .sort((left, right) => {
+              if (left.isPinned !== right.isPinned) return Number(right.isPinned) - Number(left.isPinned);
+              return new Date(right.lastMessageAt) - new Date(left.lastMessageAt);
+            }),
+        }));
+
+        try {
+          const response = await axiosInstance.post(`/messages/conversations/${conversationId}/pin`);
+          set((state) => ({
+            conversations: state.conversations.map((item) =>
+              item._id === conversationId ? { ...item, isPinned: response.data.isPinned } : item,
+            ),
+          }));
+        } catch (error) {
+          set((state) => ({
+            conversations: state.conversations
+              .map((item) =>
+                item._id === conversationId ? { ...item, isPinned: previousIsPinned } : item,
+              )
+              .sort((left, right) => {
+                if (left.isPinned !== right.isPinned) return Number(right.isPinned) - Number(left.isPinned);
+                return new Date(right.lastMessageAt) - new Date(left.lastMessageAt);
+              }),
+          }));
+          toast.error(error.response?.data?.message || "Failed to update favorite");
+        } finally {
+          set((state) => {
+            const pinningConversationIds = { ...state.pinningConversationIds };
+            delete pinningConversationIds[conversationId];
+            return { pinningConversationIds };
+          });
+        }
+      },
+
+      deleteConversation: async (conversationId) => {
+        const conversation = get().conversations.find((item) => item._id === conversationId);
+        if (!conversation || get().deletingConversationIds[conversationId]) return false;
+
+        set((state) => ({
+          deletingConversationIds: { ...state.deletingConversationIds, [conversationId]: true },
+        }));
+
+        try {
+          await axiosInstance.delete(`/messages/conversations/${conversationId}`);
+          set((state) => {
+            const isDeletedConversationActive = state.activeConversationId === conversationId;
+
+            return {
+              conversations: state.conversations.filter((item) => item._id !== conversationId),
+              activeConversationId: isDeletedConversationActive ? null : state.activeConversationId,
+              selectedUser: isDeletedConversationActive ? null : state.selectedUser,
+              messages: isDeletedConversationActive ? [] : state.messages,
+            };
+          });
+          return true;
+        } catch (error) {
+          toast.error(error.response?.data?.message || "Failed to delete chat");
+          return false;
+        } finally {
+          set((state) => {
+            const deletingConversationIds = { ...state.deletingConversationIds };
+            delete deletingConversationIds[conversationId];
+            return { deletingConversationIds };
+          });
+        }
+      },
+
       subscribeToMessages: () => {
         const socket = useAuthStore.getState().socket;
         if (!socket) return;
@@ -134,6 +215,10 @@ export const useChatStore = create(
 
           // Always refresh sidebar
           get().getConversations();
+
+          if (get().isSoundEnabled) {
+            playMessageReceivedSound();
+          }
 
           if (isOpenConversation) {
             get().getMessages(conversationPartnerId);

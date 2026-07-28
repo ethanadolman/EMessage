@@ -2,15 +2,42 @@ import { memo, useEffect, useState } from "react";
 import { Button, Modal, useOverlayState } from "@heroui/react";
 import { DownloadIcon, XIcon } from "lucide-react";
 import { withTransform } from "../../lib/imagekit";
+import { MessageAudio } from "./MessageAudio";
 import { MessageVideo } from "./MessageVideo";
 
 // Compress + size images for the bubble (q-auto works for images; f-auto picks WebP/AVIF).
 const IMAGE_TRANSFORM = "q-auto,w-640,f-auto";
 
+async function downloadMedia(url, filename) {
+  try {
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok) throw new Error("Failed to fetch media");
+
+    const objectUrl = window.URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(objectUrl);
+  } catch {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
 function MessageBubbleComponent({ message, onImageLoad, animate = false }) {
   const isOwnMessage = message.role === "me";
   const hasImage = Boolean(message.imageUrl);
   const hasVideo = Boolean(message.videoUrl);
+  const hasAudio = Boolean(message.audioUrl);
   const previewModal = useOverlayState();
   const [previewDimensions, setPreviewDimensions] = useState({ width: 0, height: 0 });
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
@@ -72,32 +99,9 @@ function MessageBubbleComponent({ message, onImageLoad, animate = false }) {
                   variant="solid"
                   color="primary"
                   className="absolute bottom-2 right-2 shadow-lg"
-                  onPress={async () => {
+                  onPress={() => {
                     const filename = `image-${message.id || "download"}`;
-
-                    try {
-                      const response = await fetch(message.imageUrl, { mode: "cors" });
-                      if (!response.ok) throw new Error("Failed to fetch image");
-
-                      const blob = await response.blob();
-                      const objectUrl = window.URL.createObjectURL(blob);
-                      const link = document.createElement("a");
-                      link.href = objectUrl;
-                      link.download = filename;
-                      link.style.display = "none";
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                      window.URL.revokeObjectURL(objectUrl);
-                    } catch {
-                      const link = document.createElement("a");
-                      link.href = message.imageUrl;
-                      link.download = filename;
-                      link.style.display = "none";
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }
+                    downloadMedia(message.imageUrl, filename);
                   }}
                 >
                   <DownloadIcon className="size-4" />
@@ -106,6 +110,18 @@ function MessageBubbleComponent({ message, onImageLoad, animate = false }) {
             </div>
           ) : null}
           {hasVideo ? <MessageVideo src={message.videoUrl} /> : null}
+          {hasAudio ? (
+            <MessageAudio
+              src={message.audioUrl}
+              name={message.audioName}
+              onDownload={() =>
+                downloadMedia(
+                  message.audioUrl,
+                  message.audioName || `audio-${message.id || "download"}`,
+                )
+              }
+            />
+          ) : null}
           {message.text ? (
             <p className="whitespace-pre-wrap wrap-break-word">{message.text}</p>
           ) : null}

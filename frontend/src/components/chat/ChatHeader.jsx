@@ -16,6 +16,32 @@ import {
   useIsLargeScreen,
 } from "../../hooks/useSelectedConversation";
 
+function formatLastOnline(lastOnlineAt) {
+  if (!lastOnlineAt) return "Last online recently";
+
+  const millisecondsAgo = Date.now() - new Date(lastOnlineAt).getTime();
+  if (Number.isNaN(millisecondsAgo) || millisecondsAgo < 60_000) return "Last online just now";
+
+  const minutesAgo = Math.floor(millisecondsAgo / 60_000);
+  if (minutesAgo < 60) return `Last online ${minutesAgo}m ago`;
+
+  const hoursAgo = Math.floor(minutesAgo / 60);
+  if (hoursAgo < 24) return `Last online ${hoursAgo}h ago`;
+
+  const daysAgo = Math.floor(hoursAgo / 24);
+  return `Last online ${daysAgo}d ago`;
+}
+
+function OfflineStatus({ lastOnlineAt }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>Offline</span>
+      <span className="text-muted/70" aria-hidden>·</span>
+      <span className="text-muted/80">{formatLastOnline(lastOnlineAt)}</span>
+    </span>
+  );
+}
+
 export function ChatHeader() {
   const isSoundEnabled = useChatStore((state) => state.isSoundEnabled);
   const setActiveConversationId = useChatStore((state) => state.setActiveConversationId);
@@ -61,7 +87,7 @@ export function ChatHeader() {
               ) : peer.isOnline ? (
                 <span className="font-medium text-success">Online</span>
               ) : (
-                "Offline"
+                <OfflineStatus lastOnlineAt={peer.lastOnlineAt} />
               )}
             </p>
           </div>
@@ -89,6 +115,8 @@ export function ChatHeader() {
           isIconOnly
           className="shrink-0"
           aria-pressed={isSoundEnabled}
+          aria-label={isSoundEnabled ? "Mute chat sounds" : "Enable chat sounds"}
+          title={isSoundEnabled ? "Mute chat sounds" : "Enable chat sounds"}
           onPress={() => setSoundEnabled(!isSoundEnabled)}
         >
           {isSoundEnabled ? (
