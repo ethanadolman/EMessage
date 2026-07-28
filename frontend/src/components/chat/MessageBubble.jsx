@@ -7,7 +7,7 @@ import { MessageVideo } from "./MessageVideo";
 // Compress + size images for the bubble (q-auto works for images; f-auto picks WebP/AVIF).
 const IMAGE_TRANSFORM = "q-auto,w-640,f-auto";
 
-function MessageBubbleComponent({ message, onImageLoad }) {
+function MessageBubbleComponent({ message, onImageLoad, animate = false }) {
   const isOwnMessage = message.role === "me";
   const hasImage = Boolean(message.imageUrl);
   const hasVideo = Boolean(message.videoUrl);
@@ -49,7 +49,7 @@ function MessageBubbleComponent({ message, onImageLoad }) {
             isOwnMessage
               ? "rounded-br-md bg-accent text-accent-foreground"
               : "rounded-bl-md bg-surface"
-          }`}
+          } ${animate ? (isOwnMessage ? "message-enter-sent" : "message-enter-received") : ""}`}
         >
           {hasImage ? (
             <div className="relative mb-1.5">

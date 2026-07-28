@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useMemo } from "react";
 import useScrollToBottom from "../../hooks/useScrollToBottom";
+import { useMessageEnterAnimation } from "../../hooks/useMessageEnterAnimation";
 import { MessageBubble } from "./MessageBubble";
 import { NoConversationPlaceholder } from "./NoConversationPlaceholder";
 import {
@@ -76,6 +77,7 @@ export function MessageList() {
   const messagesScrollRef = useScrollToBottom(activeConversationId, lastMessageId, waitForImageLoad);
 
   const messageItems = useMemo(() => buildMessageItems(messages), [messages]);
+  const animatedMessageIds = useMessageEnterAnimation(activeConversationId, messages);
 
   const scrollToBottom = useCallback(() => {
     const el = messagesScrollRef.current;
@@ -92,7 +94,7 @@ export function MessageList() {
       {hasConversation ? (
         <div
           ref={messagesScrollRef}
-          className="flex flex-1 flex-col gap-1 overflow-y-auto overscroll-contain px-2 py-3 sm:px-3 sm:py-4"
+          className="flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 sm:px-3 sm:py-4"
         >
           {messageItems.map(({ message, isNewDay, dayLabel }) => (
             <Fragment key={message.id}>
@@ -107,6 +109,7 @@ export function MessageList() {
               ) : null}
               <MessageBubble
                 message={message}
+                animate={animatedMessageIds.has(message.id)}
                 onImageLoad={
                   message.id === lastMessageId && waitForImageLoad ? scrollToBottom : undefined
                 }
